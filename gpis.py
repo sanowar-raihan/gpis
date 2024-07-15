@@ -43,28 +43,31 @@ class GaussianProcess:
         return mu, cov
 
 
-rng = np.random.default_rng(0)
+rng = np.random.default_rng(20)
 
-""" 
 # Vertices of a 2D circle
 theta = 2*np.pi*rng.random(20)
 x = np.cos(theta)
 y = np.sin(theta)
 vertices = np.vstack((x, y)).T
 z = np.zeros(vertices.shape[0])  # Implicit surface values (zero level set)
- """
 
-poly = png2poly("illustrator.png")[0]
+
+"""
+rng = np.random.default_rng(85)
+
+poly = png2poly("springer.png")[0]
 poly = poly - np.min(poly)
 poly = poly/np.max(poly)
-poly = 0.5*poly + 0.25
-poly = 3*poly - 1.5
-
+poly = 2.5*poly
+poly[:, 0] -= 0.5
+poly[:, 1] -= 1.5
+ 
 num_samples = 50
 EC = edge_indices(poly.shape[0],closed=False)
 vertices,I,_ = random_points_on_mesh(poly, EC, num_samples, return_indices=True,rng=rng)
 z = np.zeros(vertices.shape[0]) # Implicit surface values (zero level set)
-
+"""
 
 # Add a point inside the shape with negative one value
 inside_points = np.array([[0.0, 0.0]])
@@ -83,20 +86,33 @@ gp = GaussianProcess(covariance_function=thin_plate_covariance)
 gp.fit(X_train, y_train)
 
 # Create a grid for predictions
-x_pred = np.linspace(-0.9, 0.9, 50)
-y_pred = np.linspace(-0.9, 0.9, 50)
+x_pred = np.linspace(-1.5, 1.5, 50)
+y_pred = np.linspace(-1.5, 1.5, 50)
 X_pred, Y_pred = np.meshgrid(x_pred, y_pred)
 X_grid = np.vstack((X_pred.ravel(), Y_pred.ravel())).T
 
 # Predict the scalar field over the grid
-Z_pred, Z_cov = gp.predict(X_grid)
-Z_pred = Z_pred.reshape(X_pred.shape)
+Z_mean, Z_cov = gp.predict(X_grid)
+Z_samples = rng.multivariate_normal(Z_mean, Z_cov, 3)
 
-# Plot the results
-plt.figure(figsize=(10, 5))
-plt.contour(X_pred, Y_pred, Z_pred, levels=[0], colors='blue')
-plt.plot(vertices[:, 0], vertices[:, 1], '.k')
-plt.pcolormesh(X_pred,Y_pred,Z_pred,shading='gouraud',cmap='RdBu')
-plt.colorbar()
-plt.axis('equal')
+fig, axes = plt.subplots(1, Z_samples.shape[0] + 1, figsize=(24,5))
+
+# Plot the mean curve
+Z_mean = Z_mean.reshape(X_pred.shape)
+ax = axes[0]
+ax.contour(X_pred, Y_pred, Z_mean, levels=[0], colors='red')
+ax.plot(vertices[:, 0], vertices[:, 1], '.k')
+ax.set_title('Mean Curve')
+ax.axis('equal')
+
+# Plot each sample
+for i in range(Z_samples.shape[0]):
+    Z_pred = Z_samples[i]
+    Z_pred = Z_pred.reshape(X_pred.shape)
+    ax = axes[i + 1]
+    ax.contour(X_pred, Y_pred, Z_pred, levels=[0], colors='blue')
+    ax.plot(vertices[:, 0], vertices[:, 1], '.k')
+    ax.set_title(f'Sample {i+1}')
+    ax.axis('equal')
+
 plt.show()
