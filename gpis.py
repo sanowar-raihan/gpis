@@ -26,16 +26,19 @@ class GaussianProcess:
     def fit(self, X_train, y_train):
         self.X_train = X_train
         self.y_train = y_train
-        K3 = self.covariance_function(X_train, X_train)
-        self.K3_inv = np.linalg.inv(K3)
+        self.K3 = self.covariance_function(X_train, X_train)
 
     def predict(self, X_pred):
         K1 = self.covariance_function(X_pred, X_pred)
         K2 = self.covariance_function(self.X_train, X_pred)
-        K3_inv = self.K3_inv
         
-        mu = K2.T @ K3_inv @ self.y_train
-        cov = K1 - K2.T @ K3_inv @ K2
+        Q, R = np.linalg.qr(self.K3)
+        
+        X = np.linalg.solve(R, Q.T @ self.y_train)
+        mu = K2.T @ X
+        
+        Y = np.linalg.solve(R, Q.T @ K2)
+        cov = K1 - K2.T @ Y
         
         return mu, cov
 
