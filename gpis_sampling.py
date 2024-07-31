@@ -42,7 +42,7 @@ class GaussianProcess:
         
         return mu, cov
 
-
+"""
 rng = np.random.default_rng(20)
 
 # Vertices of a 2D circle
@@ -51,12 +51,12 @@ x = np.cos(theta)
 y = np.sin(theta)
 vertices = np.vstack((x, y)).T
 z = np.zeros(vertices.shape[0])  # Implicit surface values (zero level set)
-
-
 """
+
+
 rng = np.random.default_rng(85)
 
-poly = png2poly("springer.png")[0]
+poly = png2poly("images/springer.png")[0]
 poly = poly - np.min(poly)
 poly = poly/np.max(poly)
 poly = 2.5*poly
@@ -67,7 +67,7 @@ num_samples = 50
 EC = edge_indices(poly.shape[0],closed=False)
 vertices,I,_ = random_points_on_mesh(poly, EC, num_samples, return_indices=True,rng=rng)
 z = np.zeros(vertices.shape[0]) # Implicit surface values (zero level set)
-"""
+
 
 # Add a point inside the shape with negative one value
 inside_points = np.array([[0.0, 0.0]])
