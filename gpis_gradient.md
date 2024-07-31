@@ -16,8 +16,10 @@ k(x_3, x_1) & k(x_3, x_2) & k(x_3, x_3)
 2. **Covariance between function values and first order derivatives.**
    
    $\frac{\partial}{\partial x_j} k(x_i, x_j)$ represents the covariance between the function value at ${x_i}$ and derivative at $x_j$.
-   $$k(f(x_i), \frac{\partial f(x_j)}{\partial x_j}) = \frac{\partial}{\partial x_j} k(x_i, x_j)$$
-   In our 2D example, each $\frac{\partial}{\partial x_j} k(x_i, x_j)$ is a two dimensional vector. That means $K_{values-derivatives}$ will be a 3x6 matrix:    
+```math
+k(f(x_i), \frac{\partial f(x_j)}{\partial x_j}) = \frac{\partial}{\partial x_j} k(x_i, x_j)
+```
+In our 2D example, each $\frac{\partial}{\partial x_j} k(x_i, x_j)$ is a two dimensional vector. That means $K_{values-derivatives}$ will be a 3x6 matrix:    
 ```math
 K_{values-derivatives} = \begin{bmatrix}
 (\frac{\partial}{\partial x_1} k(x_1, x_1))^T & (\frac{\partial}{\partial x_2} k(x_1, x_2))^T & (\frac{\partial}{\partial x_3} k(x_1, x_3))^T\\
@@ -29,8 +31,10 @@ K_{values-derivatives} = \begin{bmatrix}
 3. **Covariances between first order derivatives and function values.**
 
     $\frac{\partial}{\partial x_i} k(x_i, x_j)$ represents the covariance between the derivative at $x_i$ and function value at $x_j$.
-    $$k(\frac{\partial f(x_i)}{\partial x_i}, f(x_j)) = \frac{\partial}{\partial x_i} k(x_i, x_j)$$
-   In our 2D example, each $\frac{\partial}{\partial x_i} k(x_i, x_j)$ is a two dimensional vector. That means $K_{derivatives-values}$ will be a 6x3 matrix:
+```math
+k(\frac{\partial f(x_i)}{\partial x_i}, f(x_j)) = \frac{\partial}{\partial x_i} k(x_i, x_j)
+```
+In our 2D example, each $\frac{\partial}{\partial x_i} k(x_i, x_j)$ is a two dimensional vector. That means $K_{derivatives-values}$ will be a 6x3 matrix:
 ```math
 K_{derivatives-values} = \begin{bmatrix}
 \frac{\partial}{\partial x_1} k(x_1, x_1) & \frac{\partial}{\partial x_1} k(x_1, x_2) & \frac{\partial}{\partial x_1} k(x_1, x_3)\\
@@ -42,8 +46,10 @@ K_{derivatives-values} = \begin{bmatrix}
 4. **Covariance between first-order derivatives.**
 
     $\frac{\partial^2}{\partial x_i \partial x_j} k(x_i, x_j)$ represents the covariance between derivative at $x_i$ and derivative at $x_j$.
-    $$k(\frac{\partial f(x_i)}{\partial x_i}, \frac{\partial f(x_j)}{\partial x_j}) = \frac{\partial^2}{\partial x_i \partial x_j} k(x_i, x_j)$$
-    In our 2D example, each second order derivative $\frac{\partial^2}{\partial x_i \partial x_j} k(x_i, x_j)$ is a 2x2 matrix. That means $K_{derivatives}$ will be a 6x6 matrix:
+```math
+k(\frac{\partial f(x_i)}{\partial x_i}, \frac{\partial f(x_j)}{\partial x_j}) = \frac{\partial^2}{\partial x_i \partial x_j} k(x_i, x_j)
+```
+In our 2D example, each second order derivative $\frac{\partial^2}{\partial x_i \partial x_j} k(x_i, x_j)$ is a 2x2 matrix. That means $K_{derivatives}$ will be a 6x6 matrix:
 ```math
 K_{derivatives} = \begin{bmatrix}
 \frac{\partial^2}{\partial x_1^2} k(x_1, x_1) & \frac{\partial^2}{\partial x_1 \partial x_2} k(x_1, x_2) & \frac{\partial^2}{\partial x_1 \partial x_3} k(x_1, x_3)\\
