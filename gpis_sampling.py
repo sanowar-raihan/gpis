@@ -1,27 +1,61 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.spatial.distance import cdist
 from gpytoolbox import png2poly, random_points_on_mesh, edge_indices
 
-# Define the Squared Exponential Covariance function (Fig.2)
-def squared_exponential_covariance(X1, X2, alpha=2.0):
-    """squared exponential covariance function."""
-    r_sq = cdist(X1, X2, "sqeuclidean")
-    return np.exp(-alpha * r_sq)
 
-# Define the Thin Plate Covariance function for 2D curevs (Equation 11.a)
-def thin_plate_covariance(X1, X2, R=2.0):
-    """thin plate covariance function"""
-    r = cdist(X1, X2, "euclidean")
-    term1 = np.where(np.abs(r) > 1e-5, 2*r**2*np.log(np.abs(r)), 0)
-    return term1 - (1 + 2*np.log(R))*r**2 + R**2
+def thin_plate_covariance_with_gradient(X1, X2, R=10):
+    """thin plate covariance function with gradient obesrvations"""
+    n1, d = X1.shape
+    n2, _ = X2.shape
+
+    X_1 = X1[:, np.newaxis, :]  # Shape (n1, 1, d)
+    X_2 = X2[np.newaxis, :, :]  # Shape (1, n2, d)
+
+    # Compute norm values from pairwise differences
+    r = np.linalg.norm(X_1 - X_2, axis=2)  # Shape (n1, n2)
+    r = np.where(r == 0, np.finfo(float).eps, r) # Avoid log(0) by setting zero norms to a small positive number
+    
+    # k(xi, xj) = 2*r^2*log(r) - (1 + 2*log(R))*r^2 + R^2
+    K_values = 2*r**2*np.log(r) - (1 + 2*np.log(R))*r**2 + R**2 # Shape (n1, n2)
+
+    # \frac{\partial}{\partial x_j} k(xi, xj) = - 4*(log(r) - log(R))*(xi-xj)
+    log_diffs = np.log(r) - np.log(R)  # Shape (n1, n2)
+    K_values_derivatives = - 4 * log_diffs[:, :, np.newaxis] * (X_1 - X_2)  # Shape (n1, n2, d)
+    K_values_derivatives = K_values_derivatives.reshape(n1, n2*d) # Shape (n1, n2*d)
+
+    # \frac{\partial}{\partial x_i} k(xi, xj) = - 4*(log(r) - log(R))*(xi-xj)
+    K_derivatives_values = 4 * log_diffs[:, :, np.newaxis] * (X_1 - X_2)  # Shape (n1, n2, d)
+    K_derivatives_values = K_derivatives_values.transpose(0, 2, 1).reshape(n1*d, n2) # Shape (n1*d, n2)
+
+    # \frac{\partial^2}{\partial xi \partial xj} k(xi, xj) = -4*((xi-xj)*(xi-xj)^T/r**2 + (log r - logR)I)
+    
+    # term1 = (xi-xj)*(xi-xj)^T/r**2 for all pairs
+    diffs = X_1 - X_2 # Shape (n1, n2, d)
+    diffs_expanded = diffs[:, :, :, np.newaxis]  # shape (n1, n2, d, 1)
+    diffs_transposed = diffs[:, :, np.newaxis, :]  # shape (n1, n2, 1, d)
+    term1 = (diffs_expanded * diffs_transposed) / (r[:, :, np.newaxis, np.newaxis] ** 2) # Shape (n1, n2, d, d)
+
+    # term2 = (log r - logR)I for all pairs
+    term2 = (np.log(r) - np.log(R))[:, :, np.newaxis, np.newaxis] * np.eye(d) # Shape (n1, n2, d, d)
+
+    K_derivatives = - 4 * (term1 + term2) # (n1, n2, d, d)
+    K_derivatives = K_derivatives.transpose(0, 2, 1, 3).reshape(n1 * d, n2 * d) # (n1*d, n2*d)
+
+    # Combine into the block matrix
+    K = np.block([
+            [K_values, K_values_derivatives],
+            [K_derivatives_values, K_derivatives]
+        ])
+        
+    return K
+
 
 # Gaussian Process Class
 class GaussianProcess:
     def __init__(self, covariance_function):
-        self.covariance_function = covariance_function
         self.X_train = None
         self.y_train = None
+        self.covariance_function = covariance_function
 
     def fit(self, X_train, y_train):
         self.X_train = X_train
@@ -39,22 +73,43 @@ class GaussianProcess:
         
         Y = np.linalg.solve(R, Q.T @ K2)
         cov = K1 - K2.T @ Y
-        
+                
         return mu, cov
 
-"""
-rng = np.random.default_rng(20)
 
+rng = np.random.default_rng(0)
+
+"""
 # Vertices of a 2D circle
 theta = 2*np.pi*rng.random(20)
 x = np.cos(theta)
 y = np.sin(theta)
-vertices = np.vstack((x, y)).T
-z = np.zeros(vertices.shape[0])  # Implicit surface values (zero level set)
+P = 2*np.vstack((x, y)).T
+
+N = np.vstack((x, y)).T # Normals are the same as positions on a circle
+z = np.zeros(P.shape[0])  # Implicit surface values (zero level set)
 """
 
+"""
+poly = png2poly("images/illustrator.png")[0]
+poly = poly - np.min(poly)
+poly = poly/np.max(poly)
+poly = 0.5*poly + 0.25
+poly = 3*poly - 1.5
+poly = poly * 2.5
+num_samples = 20
 
-rng = np.random.default_rng(85)
+EC = edge_indices(poly.shape[0],closed=False)
+P,I,_ = random_points_on_mesh(poly, EC, num_samples, return_indices=True,rng=rng)
+vecs = poly[EC[:,0],:] - poly[EC[:,1],:]
+vecs /= np.linalg.norm(vecs, axis=1)[:,None]
+J = np.array([[0., -1.], [1., 0.]])
+N = vecs @ J.T
+N = N[I,:]
+
+z = np.zeros(P.shape[0])
+"""
+
 
 poly = png2poly("images/springer.png")[0]
 poly = poly - np.min(poly)
@@ -62,57 +117,57 @@ poly = poly/np.max(poly)
 poly = 2.5*poly
 poly[:, 0] -= 0.5
 poly[:, 1] -= 1.5
+poly = 2*poly
  
 num_samples = 50
 EC = edge_indices(poly.shape[0],closed=False)
-vertices,I,_ = random_points_on_mesh(poly, EC, num_samples, return_indices=True,rng=rng)
-z = np.zeros(vertices.shape[0]) # Implicit surface values (zero level set)
+P,I,_ = random_points_on_mesh(poly, EC, num_samples, return_indices=True,rng=rng)
+vecs = poly[EC[:,0],:] - poly[EC[:,1],:]
+vecs /= np.linalg.norm(vecs, axis=1)[:,None]
+J = np.array([[0., -1.], [1., 0.]])
+N = vecs @ J.T
+N = N[I,:]
+z = np.zeros(P.shape[0]) # Implicit surface values (zero level set)
 
 
-# Add a point inside the shape with negative one value
-inside_points = np.array([[0.0, 0.0]])
-inside_values = -np.ones(inside_points.shape[0])
-
-# Add some points outside the shape with positive one values
-outside_theta = 2*np.pi*rng.random(10)[:,None]
-outside_points = 1.2*np.concatenate((np.cos(outside_theta),np.sin(outside_theta)),axis=1)
-outside_values = np.ones(outside_points.shape[0])
-
-X_train = np.vstack((vertices, inside_points, outside_points))
-y_train = np.concatenate((z, inside_values, outside_values))
+X_train = P
+y_train = np.concatenate((z, N.ravel()), axis=0)
 
 # Fit the Gaussian Process model
-gp = GaussianProcess(covariance_function=thin_plate_covariance)
+gp = GaussianProcess(covariance_function=thin_plate_covariance_with_gradient)
 gp.fit(X_train, y_train)
 
 # Create a grid for predictions
-x_pred = np.linspace(-1.5, 1.5, 50)
-y_pred = np.linspace(-1.5, 1.5, 50)
+x_pred = np.linspace(-3, 3, 50)
+y_pred = np.linspace(-3, 3, 50)
 X_pred, Y_pred = np.meshgrid(x_pred, y_pred)
 X_grid = np.vstack((X_pred.ravel(), Y_pred.ravel())).T
 
 # Predict the scalar field over the grid
 Z_mean, Z_cov = gp.predict(X_grid)
-Z_samples = rng.multivariate_normal(Z_mean, Z_cov, 3)
+Z_mean, Z_cov = Z_mean[:50**2], Z_cov[:50**2, :50**2]
 
-fig, axes = plt.subplots(1, Z_samples.shape[0] + 1, figsize=(24,5))
+num_surfaces = 3
+Z_samples = rng.multivariate_normal(Z_mean, Z_cov, num_surfaces)
 
+fig, axes = plt.subplots(1, num_surfaces + 1, figsize=(24,5))
 # Plot the mean curve
 Z_mean = Z_mean.reshape(X_pred.shape)
-ax = axes[0]
-ax.contour(X_pred, Y_pred, Z_mean, levels=[0], colors='red')
-ax.plot(vertices[:, 0], vertices[:, 1], '.k')
-ax.set_title('Mean Curve')
-ax.axis('equal')
+axes[0].scatter(P[:, 0], P[:, 1], color = 'brown')
+axes[0].quiver(P[:,0], P[:,1], N[:,0], N[:,1], angles='xy', scale_units='xy', scale=2.5)
+axes[0].contour(X_pred, Y_pred, Z_mean, levels=[0], colors='red')
+axes[0].set_title('Mean Curve')
+axes[0].set_aspect('equal')
 
-# Plot each sample
-for i in range(Z_samples.shape[0]):
+# Plot the sampled surfaces
+for i in range(num_surfaces):
     Z_pred = Z_samples[i]
     Z_pred = Z_pred.reshape(X_pred.shape)
     ax = axes[i + 1]
+    ax.scatter(P[:, 0], P[:, 1], color = 'brown')
+    ax.quiver(P[:,0], P[:,1], N[:,0], N[:,1], angles='xy', scale_units='xy', scale=2.5)
     ax.contour(X_pred, Y_pred, Z_pred, levels=[0], colors='blue')
-    ax.plot(vertices[:, 0], vertices[:, 1], '.k')
     ax.set_title(f'Sample {i+1}')
-    ax.axis('equal')
+    ax.set_aspect('equal')
 
 plt.show()
