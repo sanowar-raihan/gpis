@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 from gpytoolbox import png2poly, random_points_on_mesh, edge_indices
 
 
@@ -84,7 +85,7 @@ rng = np.random.default_rng(0)
 theta = 2*np.pi*rng.random(20)
 x = np.cos(theta)
 y = np.sin(theta)
-P = 2.5*np.vstack((x, y)).T
+P = 2*np.vstack((x, y)).T
 
 N = np.vstack((x, y)).T # Normals are the same as positions on a circle
 z = np.zeros(P.shape[0])  # Implicit surface values (zero level set)
@@ -117,7 +118,7 @@ poly = poly/np.max(poly)
 poly = 2.5*poly
 poly[:, 0] -= 0.5
 poly[:, 1] -= 1.5
-poly = 2.5*poly
+poly = 2*poly
  
 num_samples = 50
 EC = edge_indices(poly.shape[0],closed=False)
@@ -145,12 +146,32 @@ X_grid = np.vstack((X_pred.ravel(), Y_pred.ravel())).T
 
 # Predict the scalar field over the grid
 Z_pred, Z_cov = gp.predict(X_grid)
-Z_pred = Z_pred[:50**2]
-Z_pred = Z_pred.reshape(X_pred.shape)
+Z_pred, Z_cov = Z_pred[:50**2], Z_cov[:50**2, :50**2]
+Z_mean = Z_pred.reshape(X_pred.shape)
+Z_std = np.sqrt(np.diag(Z_cov)).reshape(X_pred.shape)
 
-fig, ax = plt.subplots()
-ax.scatter(P[:, 0], P[:, 1], color = 'brown')
-ax.quiver(P[:,0], P[:,1], N[:,0], N[:,1], angles='xy', scale_units='xy', scale=2.5)
-ax.contour(X_pred, Y_pred, Z_pred, levels=[0], colors='blue')
-ax.set_aspect('equal')
+# Visualize the mean and variance
+fig, ax = plt.subplots(1, 2)
+
+img0 = ax[0].pcolormesh(X_pred, Y_pred, Z_mean, vmin=-np.max(np.abs(Z_mean)), vmax=np.max(np.abs(Z_mean)), cmap='RdBu', shading='gouraud')
+divider0 = make_axes_locatable(ax[0])
+cax0 = divider0.append_axes('right', size='5%', pad=0.05)
+fig.colorbar(img0, cax=cax0, orientation='vertical')
+
+ax[0].scatter(P[:, 0], P[:, 1], color = 'brown')
+ax[0].quiver(P[:,0], P[:,1], N[:,0], N[:,1], angles='xy', scale_units='xy', scale=2.5)
+ax[0].contour(X_pred, Y_pred, Z_mean, levels=[0], colors='blue')
+ax[0].set_aspect('equal')
+ax[0].set_title('Mean')
+
+img1 = ax[1].pcolormesh(X_pred, Y_pred, Z_std, vmin=0, vmax=np.max(Z_std), cmap='plasma',shading='gouraud')
+divider1 = make_axes_locatable(ax[1])
+cax1 = divider1.append_axes('right', size='5%', pad=0.05)
+fig.colorbar(img1, cax=cax1, orientation='vertical')
+
+ax[1].scatter(P[:, 0], P[:, 1], color = 'brown')
+ax[1].quiver(P[:,0], P[:,1], N[:,0], N[:,1], angles='xy', scale_units='xy', scale=2.5)
+ax[1].set_aspect('equal')
+ax[1].set_title('Standard Deviation')
+
 plt.show()
