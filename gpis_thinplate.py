@@ -4,7 +4,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from gpytoolbox import png2poly, random_points_on_mesh, edge_indices
 
 
-def thin_plate_covariance_with_gradient(X1, X2, R=10):
+def thin_plate_covariance_with_gradient(X1, X2, R=15):
     """thin plate covariance function with gradient obesrvations"""
     n1, d = X1.shape
     n2, _ = X2.shape
@@ -80,7 +80,7 @@ class GaussianProcess:
         return mu, cov
 
 
-rng = np.random.default_rng(0)
+rng = np.random.default_rng(987)
 noise_variance = 1e-3
 
 
@@ -124,7 +124,7 @@ poly[:, 0] -= 0.5
 poly[:, 1] -= 1.5
 poly = 2*poly
  
-num_samples = 50
+num_samples = 35
 EC = edge_indices(poly.shape[0],closed=False)
 P,I,_ = random_points_on_mesh(poly, EC, num_samples, return_indices=True,rng=rng)
 vecs = poly[EC[:,0],:] - poly[EC[:,1],:]
@@ -155,23 +155,13 @@ y_pred = np.linspace(-3, 3, 25)
 X_pred, Y_pred = np.meshgrid(x_pred, y_pred)
 X_grid = np.vstack((X_pred.ravel(), Y_pred.ravel())).T
 
-# Predict the scalar field over the grid
+# Prediction over the grid
 Z_mean, Z_cov = gp.predict(X_grid)
 
-# Sample the entire gaussian process
-num_surfaces = 3
-Z_samples = rng.multivariate_normal(Z_mean, Z_cov, num_surfaces)
-
-# Take only the scalar field values
-Z_mean = Z_mean[:25**2]
-Z_cov = Z_cov[:25**2, :25**2]
-Z_samples = Z_samples[:, :25**2]
-
-
-# Visualize the mean and standard deviation
+# Visualize the mean of the scalar field
 fig, ax = plt.subplots(1, 2)
 
-img0 = ax[0].pcolormesh(X_pred, Y_pred, Z_mean.reshape(X_pred.shape), 
+img0 = ax[0].pcolormesh(X_pred, Y_pred, Z_mean[:25**2].reshape(X_pred.shape), 
                         vmin=-np.max(np.abs(Z_mean)), vmax=np.max(np.abs(Z_mean)), cmap='RdBu', shading='gouraud')
 divider0 = make_axes_locatable(ax[0])
 cax0 = divider0.append_axes('right', size='5%', pad=0.05)
@@ -179,11 +169,12 @@ fig.colorbar(img0, cax=cax0, orientation='vertical')
 
 ax[0].scatter(P[:, 0], P[:, 1], color = 'brown')
 ax[0].quiver(P[:,0], P[:,1], N[:,0], N[:,1], angles='xy', scale_units='xy', scale=2.5)
-ax[0].contour(X_pred, Y_pred, Z_mean.reshape(X_pred.shape), levels=[0], colors='blue')
+ax[0].contour(X_pred, Y_pred, Z_mean[:25**2].reshape(X_pred.shape), levels=[0], colors='blue')
 ax[0].set_aspect('equal')
 ax[0].set_title('Mean')
 
-Z_std = np.sqrt(np.diag(Z_cov))
+# Visualize the standard deviation of the scalar field
+Z_std = np.sqrt(np.diag(Z_cov[:25**2, :25**2]))
 img1 = ax[1].pcolormesh(X_pred, Y_pred, Z_std.reshape(X_pred.shape), 
                         vmin=0, vmax=np.max(Z_std), cmap='plasma',shading='gouraud')
 divider1 = make_axes_locatable(ax[1])
@@ -196,16 +187,21 @@ ax[1].set_aspect('equal')
 ax[1].set_title('Standard Deviation')
 
 
+# Sample the entire gaussian process
+num_surfaces = 4
+Z_cov_scaled = 5e-4 * Z_cov
+Z_samples = rng.multivariate_normal(Z_mean, Z_cov_scaled, num_surfaces)
+
 # Visualize the sampled surfaces
 fig, axes = plt.subplots(1, num_surfaces + 1, figsize=(24,5))
 axes[0].scatter(P[:, 0], P[:, 1], color = 'brown')
 axes[0].quiver(P[:,0], P[:,1], N[:,0], N[:,1], angles='xy', scale_units='xy', scale=2.5)
-axes[0].contour(X_pred, Y_pred, Z_mean.reshape(X_pred.shape), levels=[0], colors='red')
+axes[0].contour(X_pred, Y_pred, Z_mean[:25**2].reshape(X_pred.shape), levels=[0], colors='red')
 axes[0].set_title('Mean Curve')
 axes[0].set_aspect('equal')
 
 for i in range(num_surfaces):
-    Z_pred = Z_samples[i].reshape(X_pred.shape)
+    Z_pred = Z_samples[i][:25**2].reshape(X_pred.shape)
     ax = axes[i + 1]
     ax.scatter(P[:, 0], P[:, 1], color = 'brown')
     ax.quiver(P[:,0], P[:,1], N[:,0], N[:,1], angles='xy', scale_units='xy', scale=2.5)
