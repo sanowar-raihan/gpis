@@ -54,15 +54,17 @@ def exponential_covariance_with_gradient(X1, X2, length=0.5):
 
 # Gaussian Process Class
 class GaussianProcess:
-    def __init__(self, covariance_function):
+    def __init__(self, covariance_function, noise_variance):
         self.X_train = None
         self.y_train = None
         self.covariance_function = covariance_function
+        self.noise_variance = noise_variance
 
     def fit(self, X_train, y_train, R=3):
         self.X_train = X_train
         self.y_train = y_train
         self.K3 = self.covariance_function(X_train, X_train)
+        self.K3 = self.K3 + self.noise_variance * np.eye(self.K3.shape[0])
 
     def predict(self, X_pred):
         K1 = self.covariance_function(X_pred, X_pred)
@@ -80,6 +82,7 @@ class GaussianProcess:
 
 
 rng = np.random.default_rng(0)
+noise_variance = 1e-3
 
 
 # Vertices of a 2D circle
@@ -132,40 +135,57 @@ N = N[I,:]
 z = np.zeros(P.shape[0]) # Implicit surface values (zero level set)
 """
 
+point_noise = noise_variance * np.random.randn(P.shape[0], 2) 
+P += point_noise
+
+normal_noise = noise_variance * np.random.randn(N.shape[0], 2)
+N += normal_noise
+N /= np.linalg.norm(N, axis=1)[:, None] # Ensure the noisy normals remain unit vectors
+
 X_train = P
 y_train = np.concatenate((z, N.ravel()), axis=0)
 
 # Fit the Gaussian Process model
-gp = GaussianProcess(covariance_function=exponential_covariance_with_gradient)
+gp = GaussianProcess(exponential_covariance_with_gradient, noise_variance)
 gp.fit(X_train, y_train)
 
 # Create a grid for predictions
-x_pred = np.linspace(-3, 3, 50)
-y_pred = np.linspace(-3, 3, 50)
+x_pred = np.linspace(-3, 3, 25)
+y_pred = np.linspace(-3, 3, 25)
 X_pred, Y_pred = np.meshgrid(x_pred, y_pred)
 X_grid = np.vstack((X_pred.ravel(), Y_pred.ravel())).T
 
 # Predict the scalar field over the grid
-Z_pred, Z_cov = gp.predict(X_grid)
-Z_pred, Z_cov = Z_pred[:50**2], Z_cov[:50**2, :50**2]
-Z_mean = Z_pred.reshape(X_pred.shape)
-Z_std = np.sqrt(np.diag(Z_cov)).reshape(X_pred.shape)
+Z_mean, Z_cov = gp.predict(X_grid)
 
-# Visualize the mean and variance
+# Sample the entire gaussian process
+num_surfaces = 3
+Z_samples = rng.multivariate_normal(Z_mean, Z_cov, num_surfaces)
+
+# Take only the scalar field values
+Z_mean = Z_mean[:25**2]
+Z_cov = Z_cov[:25**2, :25**2]
+Z_samples = Z_samples[:, :25**2]
+
+
+# Visualize the mean and standard deviation
 fig, ax = plt.subplots(1, 2)
 
-img0 = ax[0].pcolormesh(X_pred, Y_pred, Z_mean, vmin=-np.max(np.abs(Z_mean)), vmax=np.max(np.abs(Z_mean)), cmap='RdBu', shading='gouraud')
+img0 = ax[0].pcolormesh(X_pred, Y_pred, Z_mean.reshape(X_pred.shape), 
+                        vmin=-np.max(np.abs(Z_mean)), vmax=np.max(np.abs(Z_mean)), cmap='RdBu', shading='gouraud')
 divider0 = make_axes_locatable(ax[0])
 cax0 = divider0.append_axes('right', size='5%', pad=0.05)
 fig.colorbar(img0, cax=cax0, orientation='vertical')
 
 ax[0].scatter(P[:, 0], P[:, 1], color = 'brown')
 ax[0].quiver(P[:,0], P[:,1], N[:,0], N[:,1], angles='xy', scale_units='xy', scale=2.5)
-ax[0].contour(X_pred, Y_pred, Z_mean, levels=[0], colors='blue')
+ax[0].contour(X_pred, Y_pred, Z_mean.reshape(X_pred.shape), levels=[0], colors='blue')
 ax[0].set_aspect('equal')
 ax[0].set_title('Mean')
 
-img1 = ax[1].pcolormesh(X_pred, Y_pred, Z_std, vmin=0, vmax=np.max(Z_std), cmap='plasma',shading='gouraud')
+Z_std = np.sqrt(np.diag(Z_cov))
+img1 = ax[1].pcolormesh(X_pred, Y_pred, Z_std.reshape(X_pred.shape), 
+                        vmin=0, vmax=np.max(Z_std), cmap='plasma',shading='gouraud')
 divider1 = make_axes_locatable(ax[1])
 cax1 = divider1.append_axes('right', size='5%', pad=0.05)
 fig.colorbar(img1, cax=cax1, orientation='vertical')
@@ -174,5 +194,23 @@ ax[1].scatter(P[:, 0], P[:, 1], color = 'brown')
 ax[1].quiver(P[:,0], P[:,1], N[:,0], N[:,1], angles='xy', scale_units='xy', scale=2.5)
 ax[1].set_aspect('equal')
 ax[1].set_title('Standard Deviation')
+
+
+# Visualize the sampled surfaces
+fig, axes = plt.subplots(1, num_surfaces + 1, figsize=(24,5))
+axes[0].scatter(P[:, 0], P[:, 1], color = 'brown')
+axes[0].quiver(P[:,0], P[:,1], N[:,0], N[:,1], angles='xy', scale_units='xy', scale=2.5)
+axes[0].contour(X_pred, Y_pred, Z_mean.reshape(X_pred.shape), levels=[0], colors='red')
+axes[0].set_title('Mean Curve')
+axes[0].set_aspect('equal')
+
+for i in range(num_surfaces):
+    Z_pred = Z_samples[i].reshape(X_pred.shape)
+    ax = axes[i + 1]
+    ax.scatter(P[:, 0], P[:, 1], color = 'brown')
+    ax.quiver(P[:,0], P[:,1], N[:,0], N[:,1], angles='xy', scale_units='xy', scale=2.5)
+    ax.contour(X_pred, Y_pred, Z_pred, levels=[0], colors='blue')
+    ax.set_title(f'Sample {i+1}')
+    ax.set_aspect('equal')
 
 plt.show()
