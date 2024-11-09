@@ -1,17 +1,18 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.lines as mlines
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.spatial.distance import cdist
 from gpytoolbox import png2poly, random_points_on_mesh, edge_indices
 
 
-def exponential_covariance(X1, X2, sigma_f=1, length=0.5):
+def exponential_covariance(X1, X2, sigma_f=1, length=1):
     """exponential covariance function"""
     # k(xi, xj) = \sigma_f**2 \exp(-r**2/2l**2)
     r_sq = cdist(X1, X2, "sqeuclidean")
     return sigma_f**2 * np.exp(-r_sq/(2*length**2))
 
-def exponential_covariance_with_gradient(X1, X2, length=0.5):
+def exponential_covariance_with_gradient(X1, X2, length=1):
     """exponential covariance function with gradient observations"""
     n1, d = X1.shape
     n2, _ = X2.shape
@@ -60,7 +61,7 @@ class GaussianProcess:
         self.covariance_function = covariance_function
         self.noise_variance = noise_variance
 
-    def fit(self, X_train, y_train, R=3):
+    def fit(self, X_train, y_train):
         self.X_train = X_train
         self.y_train = y_train
         self.K3 = self.covariance_function(X_train, X_train)
@@ -81,8 +82,9 @@ class GaussianProcess:
         return mu, cov
 
 
-rng = np.random.default_rng(0)
+rng = np.random.default_rng(42)
 noise_variance = 1e-3
+grid_size = 25
 
 
 # Vertices of a 2D circle
@@ -102,7 +104,7 @@ poly = poly/np.max(poly)
 poly = 0.5*poly + 0.25
 poly = 3*poly - 1.5
 poly = poly * 2.5
-num_samples = 20
+num_samples = 35
 
 EC = edge_indices(poly.shape[0],closed=False)
 P,I,_ = random_points_on_mesh(poly, EC, num_samples, return_indices=True,rng=rng)
@@ -124,7 +126,7 @@ poly[:, 0] -= 0.5
 poly[:, 1] -= 1.5
 poly = 2*poly
  
-num_samples = 50
+num_samples = 40
 EC = edge_indices(poly.shape[0],closed=False)
 P,I,_ = random_points_on_mesh(poly, EC, num_samples, return_indices=True,rng=rng)
 vecs = poly[EC[:,0],:] - poly[EC[:,1],:]
@@ -135,10 +137,10 @@ N = N[I,:]
 z = np.zeros(P.shape[0]) # Implicit surface values (zero level set)
 """
 
-point_noise = noise_variance * np.random.randn(P.shape[0], 2) 
+point_noise = noise_variance * rng.standard_normal(size=(P.shape[0], 2))
 P += point_noise
 
-normal_noise = noise_variance * np.random.randn(N.shape[0], 2)
+normal_noise = noise_variance * rng.standard_normal(size=(N.shape[0], 2))
 N += normal_noise
 N /= np.linalg.norm(N, axis=1)[:, None] # Ensure the noisy normals remain unit vectors
 
@@ -150,8 +152,8 @@ gp = GaussianProcess(exponential_covariance_with_gradient, noise_variance)
 gp.fit(X_train, y_train)
 
 # Create a grid for predictions
-x_pred = np.linspace(-3, 3, 25)
-y_pred = np.linspace(-3, 3, 25)
+x_pred = np.linspace(-3, 3, grid_size)
+y_pred = np.linspace(-3, 3, grid_size)
 X_pred, Y_pred = np.meshgrid(x_pred, y_pred)
 X_grid = np.vstack((X_pred.ravel(), Y_pred.ravel())).T
 
@@ -161,7 +163,7 @@ Z_mean, Z_cov = gp.predict(X_grid)
 # Visualize the mean of the scalar field
 fig, ax = plt.subplots(1, 2)
 
-img0 = ax[0].pcolormesh(X_pred, Y_pred, Z_mean[:25**2].reshape(X_pred.shape), 
+img0 = ax[0].pcolormesh(X_pred, Y_pred, Z_mean[:grid_size**2].reshape(X_pred.shape), 
                         vmin=-np.max(np.abs(Z_mean)), vmax=np.max(np.abs(Z_mean)), cmap='RdBu', shading='gouraud')
 divider0 = make_axes_locatable(ax[0])
 cax0 = divider0.append_axes('right', size='5%', pad=0.05)
@@ -169,12 +171,12 @@ fig.colorbar(img0, cax=cax0, orientation='vertical')
 
 ax[0].scatter(P[:, 0], P[:, 1], color = 'brown')
 ax[0].quiver(P[:,0], P[:,1], N[:,0], N[:,1], angles='xy', scale_units='xy', scale=2.5)
-ax[0].contour(X_pred, Y_pred, Z_mean[:25**2].reshape(X_pred.shape), levels=[0], colors='blue')
+ax[0].contour(X_pred, Y_pred, Z_mean[:grid_size**2].reshape(X_pred.shape), levels=[0], colors='blue')
 ax[0].set_aspect('equal')
 ax[0].set_title('Mean')
 
 # Visualize the standard deviation of the scalar field
-Z_std = np.sqrt(np.diag(Z_cov[:25**2, :25**2]))
+Z_std = np.sqrt(np.diag(Z_cov[:grid_size**2, :grid_size**2]))
 img1 = ax[1].pcolormesh(X_pred, Y_pred, Z_std.reshape(X_pred.shape), 
                         vmin=0, vmax=np.max(Z_std), cmap='plasma',shading='gouraud')
 divider1 = make_axes_locatable(ax[1])
@@ -192,21 +194,56 @@ num_surfaces = 4
 Z_cov_scaled = 5e-4 * Z_cov
 Z_samples = rng.multivariate_normal(Z_mean, Z_cov_scaled, num_surfaces)
 
-# Visualize the sampled surfaces
-fig, axes = plt.subplots(1, num_surfaces + 1, figsize=(24,5))
-axes[0].scatter(P[:, 0], P[:, 1], color = 'brown')
-axes[0].quiver(P[:,0], P[:,1], N[:,0], N[:,1], angles='xy', scale_units='xy', scale=2.5)
-axes[0].contour(X_pred, Y_pred, Z_mean[:25**2].reshape(X_pred.shape), levels=[0], colors='red')
-axes[0].set_title('Mean Curve')
-axes[0].set_aspect('equal')
+# Plot the mean curve
+fig_mean, ax_mean = plt.subplots()
+ax_mean.scatter(P[:, 0], P[:, 1], color = 'brown')
+ax_mean.quiver(P[:,0], P[:,1], N[:,0], N[:,1], angles='xy', scale_units='xy', scale=2.5)
+ax_mean.contour(X_pred, Y_pred, Z_mean[:grid_size**2].reshape(X_pred.shape), levels=[0], colors='red')
+ax_mean.set_title('Mean Curve')
+ax_mean.set_aspect('equal')
 
+# Visualize the sampled surfaces
+contour_levels = [-0.6, -0.3, 0, 0.3, 0.6]
+contour_colors = ['blue', 'magenta', 'red', 'green', 'cyan']
 for i in range(num_surfaces):
-    Z_pred = Z_samples[i][:25**2].reshape(X_pred.shape)
-    ax = axes[i + 1]
-    ax.scatter(P[:, 0], P[:, 1], color = 'brown')
-    ax.quiver(P[:,0], P[:,1], N[:,0], N[:,1], angles='xy', scale_units='xy', scale=2.5)
-    ax.contour(X_pred, Y_pred, Z_pred, levels=[0], colors='blue')
-    ax.set_title(f'Sample {i+1}')
-    ax.set_aspect('equal')
+    fig_sample, ax_sample = plt.subplots()
+
+    scalar_values = Z_samples[i][:grid_size**2]
+
+    # Remaining values are gradients, with pairs representing (dx, dy) at each point
+    gradient_values = Z_samples[i][grid_size**2:].reshape(grid_size**2, 2)
+    gradient_x = gradient_values[:, 0].reshape(grid_size, grid_size)  # dx for each point
+    gradient_y = gradient_values[:, 1].reshape(grid_size, grid_size)  # dy for each point
+
+    scalar_field_grid = scalar_values.reshape(grid_size, grid_size)
+
+    contours_sample= ax_sample.contour(X_pred, Y_pred, scalar_field_grid, levels=contour_levels, colors=contour_colors)
+
+    # Extract contour line coordinates and plot the gradient vectors with quiver
+    for seg in contours_sample.allsegs:
+        for vertices in seg:
+            contour_x, contour_y = vertices[:, 0], vertices[:, 1]
+
+            # Find the nearest grid points for quiver
+            idx_x = np.searchsorted(x_pred, contour_x)
+            idx_y = np.searchsorted(y_pred, contour_y)
+            
+            # Make sure the indices stay within bounds
+            idx_x = np.clip(idx_x, 0, gradient_x.shape[1] - 1)
+            idx_y = np.clip(idx_y, 0, gradient_y.shape[0] - 1)
+            
+            contour_gradient_x = gradient_x[idx_y, idx_x]
+            contour_gradient_y = gradient_y[idx_y, idx_x]
+
+            ax_sample.quiver(contour_x, contour_y, contour_gradient_x, contour_gradient_y, 
+                    angles='xy', scale_units='xy', scale=2, color='black')
+            
+    # Add legend for contour values            
+    handles = [mlines.Line2D([], [], color=color, label=f'Level {level}') 
+               for color, level in zip(contour_colors, contour_levels)]
+    ax_sample.legend(handles=handles, title='Contour Levels', loc='upper right', bbox_to_anchor=(1.2, 1))
+
+    ax_sample.set_title(f'Sampled vector field {i+1}')
+    ax_sample.set_aspect('equal')
 
 plt.show()
