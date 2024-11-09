@@ -193,15 +193,7 @@ num_surfaces = 4
 Z_cov_scaled = 5e-4 * Z_cov
 Z_samples = rng.multivariate_normal(Z_mean, Z_cov_scaled, num_surfaces)
 
-# Plot the mean curve
-fig_mean, ax_mean = plt.subplots()
-ax_mean.scatter(P[:, 0], P[:, 1], color = 'brown')
-ax_mean.quiver(P[:,0], P[:,1], N[:,0], N[:,1], angles='xy', scale_units='xy', scale=2.5)
-ax_mean.contour(X_pred, Y_pred, Z_mean[:grid_size**2].reshape(X_pred.shape), levels=[0], colors='red')
-ax_mean.set_title('Mean Curve')
-ax_mean.set_aspect('equal')
-
-# Visualize the sampled surfaces
+# Visualize the sampled vector field
 contour_levels = [-0.05, 0, 0.05, 0.1]
 contour_colors = ['blue', 'red', 'green', 'magenta']
 for i in range(num_surfaces):
