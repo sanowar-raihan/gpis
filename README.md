@@ -6,5 +6,5 @@
 
 
 # References
-* "[Gaussian Process Implicit Surfaces](https://gpss.cc/gpip/abstract/owilliams.pdf)" by Oliver Williams, Andrew Fitzgibbon.
-* "[Gaussian Process Implicit Surfaces for Shape Estimation and Fluent Grasping]()" by Stanimir Dragiev, Mark Toussaint, Michael Gienger
+* [Gaussian Process Implicit Surfaces](https://gpss.cc/gpip/abstract/owilliams.pdf) by Oliver Williams, Andrew Fitzgibbon.
+* [Gaussian Process Implicit Surfaces for Shape Estimation and Fluent Grasping](https://argmin.lis.tu-berlin.de/papers/11-dragiev-ICRA.pdf) by Stanimir Dragiev, Mark Toussaint, Michael Gienger.
